@@ -8,7 +8,7 @@ from .data import get_loaders
 
 from collections import defaultdict
 import fnmatch
-
+from tqdm import tqdm
 
 # Function to evaluate perplexity (ppl) on a specified model and tokenizer
 def eval_ppl(args, model, tokenizer, device=torch.device("cuda:0")):
@@ -92,7 +92,7 @@ def eval_ppl_wikitext(model, testenc, bs=1, device=None):
     print(f"nsamples {nsamples}")
 
     # Loop through each batch
-    for i in range(0,nsamples,bs):
+    for i in tqdm(range(0, nsamples, bs), desc="Processing samples"):
         if i % 50 == 0:
             print(f"sample {i}")
 
@@ -123,6 +123,7 @@ def eval_ppl_wikitext(model, testenc, bs=1, device=None):
     # Compute perplexity
     ppl = torch.exp(torch.stack(nlls).sum() / (nsamples * model.seqlen))
 
+    print(ppl)
     # Empty CUDA cache to save memory
     torch.cuda.empty_cache()
 
