@@ -1,0 +1,58 @@
+QAT:
+    fully_quantized: False
+    device: 'cuda'
+    data_quantization:
+      status: On
+      bits: 8
+      custom_bits: {}
+      symmetric: on
+      per_channel: True
+      quantization_mode: 'dynamic'
+      observer: 'MinMax'
+    weights_quantization:
+      status: On
+      bits: 8
+      custom_bits: {}
+      symmetric: On
+      per_channel: False
+      quant_and_freeze: False
+
+    matmul_quantization:
+      #  input_1     x   input_2    =   output
+      # 4D case:
+      # (b, h, m, n) x (b, h, n, p) = (b, h, m, p)
+      # (b, h, m, 1)   (b, h, 1, 1) <- scale factors
+      # 3D case (no heads):
+      # (b, m, n) x (b, n, p) = (b, m, p)
+      # (b, m, 1)   (b, 1, 1) <- scale factors
+      input_1: # per token
+        bits: 8
+        symmetric: on
+        dims: [0, -1] # override per channel per head if dims is available
+        #per_token: True
+      input_2: # per tensor
+        bits: 8
+        symmetric: on
+        dims: [0, -1, -2] # override per channel per head if dims is available
+        #per_token: True
+#Pruning:
+#  pruning_layers_config: { }
+#  sparsity_goal: 0.4
+#  initial_sparsity: 0
+#  use_epochs: True
+#  prune_freq: 5
+#  prune_epochs: 15
+#  train_epochs: 0
+#  training_set_length: 40
+#  batch_size: 1
+##  optimize_pruning_scheme: False
+#  input_size: !!python/tuple [ 1,1024, 4096]
+#  min_sparsity: 0
+#  pruning_mode: 'unstructured'
+##  semi_structured_pruning_config:
+##    window_size: 16
+##    fuse_size: 4
+##    output_maps: 32
+##    acceleration_factor: 2
+##    permute_weights_matrix: False
+#  device: 'cuda'
