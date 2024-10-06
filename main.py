@@ -2,11 +2,14 @@ import argparse
 import os 
 import numpy as np
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoTokenizer, AutoModelForCausalLM, LlamaForCausalLM
 from importlib.metadata import version
 
 from lib.prune import prune_wanda, prune_magnitude, prune_sparsegpt, prune_ablate, check_sparsity, find_layers
 from lib.eval import eval_ppl, eval_zero_shot
+#import liteml
+from liteml.ailabs_liteml.retrainer import RetrainerModel, RetrainerConfig
+from liteml.ailabs_shared.load_config import load_config
 
 print('torch', version('torch'))
 print('transformers', version('transformers'))
@@ -14,15 +17,19 @@ print('accelerate', version('accelerate'))
 print('# of gpus: ', torch.cuda.device_count())
 
 def get_llm(model_name, cache_dir="llm_weights"):
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name, 
-        torch_dtype=torch.float16, 
-        cache_dir=cache_dir, 
-        low_cpu_mem_usage=True, 
-        device_map="auto"
+    # model = AutoModelForCausalLM.from_pretrained(
+    model = LlamaForCausalLM.from_pretrained(
+        model_name,
+        torch_dtype=torch.float16,
+        cache_dir=cache_dir,
+        low_cpu_mem_usage=True,
+        device_map="auto",
+        attn_implementation="eager",
+        use_cache=False
     )
-
-    model.seqlen = model.config.max_position_embeddings 
+    #change seqlen to 1024
+    model.seqlen = 1024
+    # model.seqlen = model.config.max_position_embeddings
     return model
 
 def main():
@@ -31,11 +38,13 @@ def main():
     parser.add_argument('--seed', type=int, default=0, help='Seed for sampling the calibration data.')
     parser.add_argument('--nsamples', type=int, default=128, help='Number of calibration samples.')
     parser.add_argument('--sparsity_ratio', type=float, default=0, help='Sparsity level')
-    parser.add_argument("--sparsity_type", type=str, choices=["unstructured", "4:8", "2:4"])
-    parser.add_argument("--prune_method", type=str, choices=["magnitude", "wanda", "sparsegpt", 
-                        "ablate_mag_seq", "ablate_wanda_seq", "ablate_mag_iter", "ablate_wanda_iter", "search"])
-    parser.add_argument("--cache_dir", default="llm_weights", type=str )
-    parser.add_argument('--use_variant', action="store_true", help="whether to use the wanda variant described in the appendix")
+    parser.add_argument("--sparsity_type", type=str, choices=["unstructured", "4:8", "2:4", "16:32"])
+    parser.add_argument("--prune_method", type=str, choices=["magnitude", "wanda", "sparsegpt",
+                                                             "ablate_mag_seq", "ablate_wanda_seq", "ablate_mag_iter",
+                                                             "ablate_wanda_iter", "search"])
+    parser.add_argument("--cache_dir", default="llm_weights", type=str)
+    parser.add_argument('--use_variant', action="store_true",
+                        help="whether to use the wanda variant described in the appendix")
     parser.add_argument('--save', type=str, default=None, help='Path to save results.')
     parser.add_argument('--save_model', type=str, default=None, help='Path to save the pruned model.')
 
@@ -80,6 +89,13 @@ def main():
     print(f"sparsity sanity check {sparsity_ratio:.4f}")
     print("*"*30)
     ################################################################
+
+    print("Retrain_model")
+    config_name = "config/w8a8_per_tensor_pc_dynamic_asy_mamtul pertoken_tensor.yaml"
+
+    conf = load_config(config_name)
+    model = RetrainerModel(model, config=RetrainerConfig(conf))
+
     ppl_test = eval_ppl(args, model, tokenizer, device)
     print(f"wikitext perplexity {ppl_test}")
 
@@ -103,8 +119,8 @@ def main():
         print(results)
 
     if args.save_model:
-        model.save_pretrained(args.save_model)
-        tokenizer.save_pretrained(args.save_model)
+        model.save_pretrained(args.save_model,safe_serialization=False)
+        tokenizer.save_pretrained(args.save_model,safe_serialization=False)
 
 if __name__ == '__main__':
     main()
